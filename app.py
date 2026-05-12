@@ -52,7 +52,7 @@ def generate(model, stoi, itos, prompt):
     if not tokens:
         return "None of those words are in my vocabulary."
     x = torch.tensor(tokens).unsqueeze(0)
-    for _ in range(50):
+    for _ in range(60):
         x_cond = x[:, -block_size:]
         with torch.no_grad():
             logits = model(x_cond)[:, -1, :] / 0.8
@@ -60,7 +60,7 @@ def generate(model, stoi, itos, prompt):
             probs = F.softmax(values, dim=-1)
             next_token = indices.gather(-1, torch.multinomial(probs, 1))
         x = torch.cat([x, next_token], dim=1)
-    return " ".join([itos[t] for t in x[0].tolist()])
+    return " ".join([itos[t] for t in x[0].tolist()[len(tokens):]])
 
 def get_chatgpt(prompt):
     client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -73,14 +73,30 @@ def get_chatgpt(prompt):
 st.title("Mini-GPT vs ChatGPT")
 st.caption("A GPT trained from scratch vs ChatGPT — side by side")
 
+# Initialize conversation history
+if "history" not in st.session_state:
+    st.session_state.history = []
+
 prompt = st.text_input("Enter your prompt")
 
 if st.button("Compare") and prompt:
     model, stoi, itos = load_model()
+    mini_response = generate(model, stoi, itos, prompt)
+    gpt_response = get_chatgpt(prompt)
+    st.session_state.history.append({
+        "prompt": prompt,
+        "mini": mini_response,
+        "gpt": gpt_response
+    })
+
+# Display full history
+for entry in st.session_state.history:
+    st.markdown(f"**You:** {entry['prompt']}")
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Mini-GPT")
-        st.write(generate(model, stoi, itos, prompt))
+        st.write(entry["mini"])
     with col2:
         st.subheader("ChatGPT")
-        st.write(get_chatgpt(prompt))
+        st.write(entry["gpt"])
+    st.divider()

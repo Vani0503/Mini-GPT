@@ -1,191 +1,90 @@
-"""
-Streamlit: side-by-side Mini-GPT (Day 7 word-level model) vs OpenAI Chat.
-
-Checkpoint: mini_gpt_checkpoint.pth with model_state_dict, stoi, itos, vocab_size
-(as produced by your training script).
-
-Secrets: set OPENAI_API_KEY in Streamlit Cloud secrets or env.
-"""
-
-from __future__ import annotations
-
-import os
-import tempfile
-from pathlib import Path
-from urllib.request import urlretrieve
-
-import streamlit as st
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import streamlit as st
 from openai import OpenAI
 
-from mini_gpt_model import generate_words, load_mini_gpt_checkpoint
+embed_dim = 64
+block_size = 64
 
+class MiniTransformerBlock(nn.Module):
+    def __init__(self, embed_dim):
+        super().__init__()
+        self.attention = nn.MultiheadAttention(embed_dim=embed_dim, num_heads=4, batch_first=True)
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.dropout1 = nn.Dropout(0.1)
+        self.ff = nn.Sequential(nn.Linear(embed_dim, embed_dim * 4), nn.ReLU(), nn.Linear(embed_dim * 4, embed_dim))
+        self.norm2 = nn.LayerNorm(embed_dim)
+        self.dropout2 = nn.Dropout(0.1)
 
-def get_device() -> torch.device:
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
+    def forward(self, x):
+        T = x.size(1)
+        mask = torch.triu(torch.ones(T, T), diagonal=1).bool().to(x.device)
+        attn_output, _ = self.attention(x, x, x, attn_mask=mask)
+        x = self.norm1(x + self.dropout1(attn_output))
+        x = self.norm2(x + self.dropout2(self.ff(x)))
+        return x
 
+class MiniGPT(nn.Module):
+    def __init__(self, vocab_size, embed_dim):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_dim)
+        self.position_embedding = nn.Embedding(block_size, embed_dim)
+        self.blocks = nn.Sequential(*[MiniTransformerBlock(embed_dim) for _ in range(4)])
+        self.final_norm = nn.LayerNorm(embed_dim)
+        self.linear = nn.Linear(embed_dim, vocab_size)
+
+    def forward(self, x):
+        B, T = x.shape
+        x = self.embedding(x) + self.position_embedding(torch.arange(T, device=x.device))
+        return self.linear(self.final_norm(self.blocks(x)))
 
 @st.cache_resource
-def load_checkpoint_resource(checkpoint_path: str):
-    device = get_device()
-    model, meta = load_mini_gpt_checkpoint(checkpoint_path, device)
-    return model, meta, device
+def load_model():
+    checkpoint = torch.load("mini_gpt_checkpoint.pth", map_location="cpu")
+    model = MiniGPT(checkpoint["vocab_size"], embed_dim)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
+    return model, checkpoint["stoi"], checkpoint["itos"]
 
+def generate(model, stoi, itos, prompt):
+    tokens = [stoi[w] for w in prompt.split() if w in stoi]
+    if not tokens:
+        return "None of those words are in my vocabulary."
+    x = torch.tensor(tokens).unsqueeze(0)
+    for _ in range(50):
+        x_cond = x[:, -block_size:]
+        with torch.no_grad():
+            logits = model(x_cond)[:, -1, :] / 0.8
+            values, indices = torch.topk(logits, 20)
+            probs = F.softmax(values, dim=-1)
+            next_token = indices.gather(-1, torch.multinomial(probs, 1))
+        x = torch.cat([x, next_token], dim=1)
+    return " ".join([itos[t] for t in x[0].tolist()])
 
-def ensure_checkpoint(path_str: str, download_url: str | None) -> str | None:
-    p = Path(path_str).expanduser()
-    if p.is_file():
-        return str(p.resolve())
-    if download_url:
-        cache_dir = Path(tempfile.gettempdir()) / "mini_gpt_streamlit"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        name = Path(download_url.split("?")[0]).name or "mini_gpt_checkpoint.pth"
-        dest = cache_dir / name
-        if not dest.is_file():
-            urlretrieve(download_url, dest)
-        return str(dest)
-    return None
-
-
-def run_openai_chat(api_key: str, model_name: str, user_text: str, system_prompt: str) -> str:
+def get_chatgpt(prompt, api_key):
     client = OpenAI(api_key=api_key)
-    r = client.chat.completions.create(
-        model=model_name,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_text},
-        ],
-        temperature=0.7,
-    )
-    return (r.choices[0].message.content or "").strip()
+    return client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt}]
+    ).choices[0].message.content
 
-
-def init_session_state() -> None:
-    if "turns" not in st.session_state:
-        st.session_state.turns = []
-
-
-st.set_page_config(page_title="Mini-GPT vs ChatGPT", layout="wide", page_icon="⚖️")
-init_session_state()
-
+# UI
 st.title("Mini-GPT vs ChatGPT")
-st.caption(
-    "Mini-GPT uses your Day 7 checkpoint (word-level vocabulary). "
-    "History stays until you clear it or close the session."
-)
+st.caption("A GPT trained from scratch vs ChatGPT — side by side")
 
-with st.sidebar:
-    st.subheader("OpenAI")
-    try:
-        secret_key = st.secrets.get("OPENAI_API_KEY", "")
-    except Exception:
-        secret_key = ""
-    env_key = os.getenv("OPENAI_API_KEY", "")
-    api_key = (secret_key or env_key or st.text_input("OpenAI API key", type="password")).strip()
-    openai_model = st.text_input("OpenAI model", value=os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
-    system_prompt = st.text_area(
-        "System prompt (ChatGPT)",
-        value="You are a helpful assistant. Answer clearly and concisely.",
-        height=100,
-    )
+api_key = st.text_input("OpenAI API Key", type="password")
+prompt = st.text_input("Enter your prompt")
 
-    st.subheader("Mini-GPT checkpoint")
-    default_ckpt = os.getenv("MINI_GPT_CHECKPOINT", "mini_gpt_checkpoint.pth")
-    ckpt_path = st.text_input("Checkpoint path", value=default_ckpt)
-    ckpt_url = st.text_input(
-        "Optional: raw download URL",
-        value=os.getenv("MINI_GPT_CHECKPOINT_URL", ""),
-        help="If the .pth is not in the repo, provide a direct raw URL (small files; GitHub LFS often fails).",
-    )
-
-    st.subheader("Generation (matches training script)")
-    max_new = st.slider("Max new tokens", 8, 256, 50, 8)
-    temperature = st.slider("Temperature", 0.1, 2.0, 0.8, 0.1)
-    top_k = st.slider("top_k (0 = sample from full vocab)", 0, 200, 20)
-
-    if st.button("Clear chat history", type="secondary"):
-        st.session_state.turns = []
-        st.rerun()
-
-resolved = ensure_checkpoint(ckpt_path, ckpt_url.strip() or None)
-model_loaded = False
-meta: dict = {}
-model = None
-device = get_device()
-
-if resolved:
-    try:
-        model, meta, device = load_checkpoint_resource(resolved)
-        model_loaded = True
-    except Exception as e:
-        st.error(f"Failed to load checkpoint: {e}")
-        model_loaded = False
-else:
-    st.warning(
-        f"Checkpoint not found at `{ckpt_path}`. "
-        "Commit `mini_gpt_checkpoint.pth` next to `app.py` or set MINI_GPT_CHECKPOINT_URL."
-    )
-
-if model_loaded and model is not None:
-    with st.sidebar:
-        vs = meta.get("vocab_size", "?")
-        bs = meta.get("block_size", "?")
-        ed = meta.get("embed_dim", "?")
-        st.success(f"Loaded on {device} | vocab={vs} | block={bs} | embed={ed}")
-
-for i, turn in enumerate(st.session_state.turns):
-    with st.container():
-        st.markdown(f"**You** ({i + 1})")
-        st.info(turn["user"])
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("### Mini-GPT")
-            st.markdown(turn["mini"])
-        with c2:
-            st.markdown("### ChatGPT")
-            st.markdown(turn["openai"])
-        st.divider()
-
-if not st.session_state.turns:
-    st.markdown(
-        "Messages are split on **whitespace** (same as training). "
-        "Words not in your training vocabulary are skipped for Mini-GPT."
-    )
-
-user_input = st.chat_input("Message…")
-
-if user_input and not api_key:
-    st.warning("Add your OpenAI API key in the sidebar or set OPENAI_API_KEY in secrets.")
-
-top_k_arg = int(top_k) if top_k > 0 else 0
-
-if user_input and api_key and model_loaded and model is not None:
-    mini_out = ""
-    oa_out = ""
-    with st.spinner("Running Mini-GPT…"):
-        try:
-            mini_out = generate_words(
-                model,
-                meta["stoi"],
-                meta["itos"],
-                user_input,
-                device,
-                block_size=int(meta["block_size"]),
-                max_new_tokens=max_new,
-                temperature=temperature,
-                top_k=top_k_arg,
-            )
-        except Exception as e:
-            mini_out = f"[Mini-GPT error] {e}"
-    with st.spinner("Calling ChatGPT…"):
-        try:
-            oa_out = run_openai_chat(api_key, openai_model, user_input, system_prompt)
-        except Exception as e:
-            oa_out = f"[OpenAI error] {e}"
-
-    st.session_state.turns.append({"user": user_input, "mini": mini_out, "openai": oa_out})
-    st.rerun()
+if st.button("Compare") and prompt:
+    model, stoi, itos = load_model()
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Mini-GPT")
+        st.write(generate(model, stoi, itos, prompt))
+    with col2:
+        st.subheader("ChatGPT")
+        if api_key:
+            st.write(get_chatgpt(prompt, api_key))
+        else:
+            st.warning("Add your OpenAI API key above")

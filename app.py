@@ -62,8 +62,8 @@ def generate(model, stoi, itos, prompt):
         x = torch.cat([x, next_token], dim=1)
     return " ".join([itos[t] for t in x[0].tolist()])
 
-def get_chatgpt(prompt, api_key):
-    client = OpenAI(api_key=api_key)
+def get_chatgpt(prompt):
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     return client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": prompt}]
@@ -73,7 +73,6 @@ def get_chatgpt(prompt, api_key):
 st.title("Mini-GPT vs ChatGPT")
 st.caption("A GPT trained from scratch vs ChatGPT — side by side")
 
-api_key = st.text_input("OpenAI API Key", type="password")
 prompt = st.text_input("Enter your prompt")
 
 if st.button("Compare") and prompt:
@@ -84,7 +83,4 @@ if st.button("Compare") and prompt:
         st.write(generate(model, stoi, itos, prompt))
     with col2:
         st.subheader("ChatGPT")
-        if api_key:
-            st.write(get_chatgpt(prompt, api_key))
-        else:
-            st.warning("Add your OpenAI API key above")
+        st.write(get_chatgpt(prompt))

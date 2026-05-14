@@ -153,6 +153,8 @@ Loss measures how wrong the model was. The model was genuinely learning. Large d
 
 **PM Insight:** Data quality shapes everything. A model trained on two sentences learns almost nothing useful. The observation that data quality often matters more than model size is now a foundational idea in AI strategy discussions.
 
+![Training Loss](assets/training_loss_curve.png)
+
 ---
 
 ## Day 7: Positional Encoding, Causal Masking, Generation, Decoding

@@ -86,6 +86,7 @@ The causal mask prevents tokens from looking ahead at future words during traini
 
 **PM Insight:** When attention focuses on the wrong tokens, the output gets built on faulty context. This is one reason hallucination happens. But it is not the only reason. The training data itself may have been wrong. The model may never have seen the concept and is extrapolating. Or the final sampling step may just pick an unlikely word. Hallucination is not one problem with one fix.
 
+![Attention Visualization](assets/attention_visualization.png)
 ---
 
 ## Day 4: Transformer Block
@@ -171,6 +172,7 @@ I used learned positional embeddings, meaning the model learns what each positio
 
 **Decision:** Learned positional embeddings over the original sinusoidal approach from the Attention Is All You Need paper. Simpler to implement, trains alongside everything else.
 
+![Training Loss](assets/training_loss_curve.png)
 ---
 
 ### Causal Masking Properly Connected

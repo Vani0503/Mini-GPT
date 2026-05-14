@@ -152,7 +152,7 @@ Loss measures how wrong the model was. The model was genuinely learning. Large d
 **Known gaps at this stage:** There was no split between training data and held-out validation data, so there was no way to detect if the model was just memorising examples. Causal masking had been implemented manually in Days 1–3 but was not yet connected to this full model. Both were fixed in Day 7.
 
 **PM Insight:** Data quality shapes everything. A model trained on two sentences learns almost nothing useful. The observation that data quality often matters more than model size is now a foundational idea in AI strategy discussions.
-
+![Training Loss](assets/training_loss_curve.png)
 ---
 
 ## Day 7: Positional Encoding, Causal Masking, Generation, Decoding
@@ -171,8 +171,6 @@ x = token_embeddings + self.position_embedding(positions)
 I used learned positional embeddings, meaning the model learns what each position should add to a token, rather than using a fixed mathematical formula. The model was built for sequences of up to 64 tokens. That limit is baked into the architecture, not adjustable at runtime.
 
 **Decision:** Learned positional embeddings over the original sinusoidal approach from the Attention Is All You Need paper. Simpler to implement, trains alongside everything else.
-
-![Training Loss](assets/training_loss_curve.png)
 ---
 
 ### Causal Masking Properly Connected

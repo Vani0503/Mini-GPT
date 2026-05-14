@@ -187,7 +187,7 @@ class MiniTransformerBlock(nn.Module):
 *LayerNorm:* After attention and after feedforward, activations can grow large or shrink toward zero as they pass through many layers, making training unstable. LayerNorm fixes this by normalizing each token's feature vector independently: it computes the mean and variance across all embed_dim values for that token, then rescales — `(x - mean) / sqrt(variance + epsilon)`. It then applies two small learned parameters (scale and shift) on top. Result: each token vector entering the next operation has roughly zero mean and unit variance. Crucially, LayerNorm operates per-token across features — not across the batch — so it works regardless of batch size.
 
 **Decisions made:**
-- Used 2 stacked blocks in mini_gpt.py. Real GPT-2 small uses 12; GPT-3 uses 96. Each layer refines representations progressively — early layers tend to learn local syntax, middle layers sentence structure, deep layers abstract reasoning-like patterns. Nobody programs this hierarchy — it emerges from repeated optimization.
+- Used 4 stacked blocks in mini_gpt.py. Real GPT-2 small uses 12; GPT-3 uses 96. Each layer refines representations progressively — early layers tend to learn local syntax, middle layers sentence structure, deep layers abstract reasoning-like patterns. Nobody programs this hierarchy — it emerges from repeated optimization.
 - Kept `embed_dim = 16` in the Day 4 file for visual interpretability, then moved back to 64 in the full model.
 
 **Output shapes confirmed:**

@@ -153,7 +153,7 @@ Loss measures how wrong the model was. The model was genuinely learning. Large d
 
 **PM Insight:** Data quality shapes everything. A model trained on two sentences learns almost nothing useful. The observation that data quality often matters more than model size is now a foundational idea in AI strategy discussions.
 
-![Training Loss](assets/training_loss_curve.png)
+![Training Loss](https://raw.githubusercontent.com/Vani0503/Mini-GPT/main/assets/training_loss_curve.png)
 
 ---
 

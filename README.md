@@ -87,6 +87,7 @@ The causal mask prevents tokens from looking ahead at future words during traini
 **PM Insight:** When attention focuses on the wrong tokens, the output gets built on faulty context. This is one reason hallucination happens. But it is not the only reason. The training data itself may have been wrong. The model may never have seen the concept and is extrapolating. Or the final sampling step may just pick an unlikely word. Hallucination is not one problem with one fix.
 
 ![Attention Visualization](assets/attention_visualization.png)
+
 ---
 
 ## Day 4: Transformer Block
@@ -153,8 +154,6 @@ Loss measures how wrong the model was. The model was genuinely learning. Large d
 
 **PM Insight:** Data quality shapes everything. A model trained on two sentences learns almost nothing useful. The observation that data quality often matters more than model size is now a foundational idea in AI strategy discussions.
 
-![Training Loss](https://raw.githubusercontent.com/Vani0503/Mini-GPT/main/assets/training_loss_curve.png)
-
 ---
 
 ## Day 7: Positional Encoding, Causal Masking, Generation, Decoding
@@ -173,6 +172,7 @@ x = token_embeddings + self.position_embedding(positions)
 I used learned positional embeddings, meaning the model learns what each position should add to a token, rather than using a fixed mathematical formula. The model was built for sequences of up to 64 tokens. That limit is baked into the architecture, not adjustable at runtime.
 
 **Decision:** Learned positional embeddings over the original sinusoidal approach from the Attention Is All You Need paper. Simpler to implement, trains alongside everything else.
+
 ---
 
 ### Causal Masking Properly Connected
@@ -199,6 +199,8 @@ Random batch sampling was introduced here. Instead of feeding training data sequ
 The validation split means every 200 steps, the model is tested on text it has never trained on. If training loss keeps falling but held-out loss stops improving, the model is memorising rather than learning general patterns.
 
 Training loss fell to near zero. Validation loss climbed to 12.7. The model memorised the training text rather than learning from it; a direct consequence of training on a small corpus.
+
+![Training Loss](https://raw.githubusercontent.com/Vani0503/Mini-GPT/main/assets/training_loss_curve.png)
 
 ---
 

@@ -178,7 +178,7 @@ class MiniTransformerBlock(nn.Module):
 
 **Why each component exists:**
 
-*Multi-head attention (`num_heads=4`):* Instead of one Query/Key/Value triplet, we run four in parallel. Each head learns different relationship types — one might specialize in local syntax, another in long-range dependencies. The model discovers this specialization automatically through training. Nobody labels what head 1 is "for." Researchers studying interpretability have found heads that track bracket matching in code, resolve pronouns, and identify subject-verb relationships.
+*Multi-head attention (`num_heads=2`):* Instead of one Query/Key/Value triplet, we run two in parallel. Each head learns different relationship types — one might specialize in local syntax, another in long-range dependencies. The model discovers this specialization automatically through training. Nobody labels what head 1 is "for." Researchers studying interpretability have found heads that track bracket matching in code, resolve pronouns, and identify subject-verb relationships.
 
 *Residual connections (`x = norm(x + f(x))`):* Here x is the tensor of all token representations at that point in the network — shape (B, T, embed_dim), meaning all token vectors for the current batch stacked together. The formula `x = norm(x + f(x))` means: pass the current representations through a transformation f (either attention or feedforward), then add the result back elementwise to whatever x was before that transformation. The original information is preserved; f only contributes a delta. This was a breakthrough from ResNet (Kaiming He, ~2015). Without residuals, each layer overwrites the previous representation, gradients struggle to flow backward through many layers, and deep networks become unstable. With residuals, each layer contributes refinements on top of preserved earlier information.
 
@@ -187,7 +187,7 @@ class MiniTransformerBlock(nn.Module):
 *LayerNorm:* After attention and after feedforward, activations can grow large or shrink toward zero as they pass through many layers, making training unstable. LayerNorm fixes this by normalizing each token's feature vector independently: it computes the mean and variance across all embed_dim values for that token, then rescales — `(x - mean) / sqrt(variance + epsilon)`. It then applies two small learned parameters (scale and shift) on top. Result: each token vector entering the next operation has roughly zero mean and unit variance. Crucially, LayerNorm operates per-token across features — not across the batch — so it works regardless of batch size.
 
 **Decisions made:**
-- Used 4 stacked blocks in mini_gpt.py. Real GPT-2 small uses 12; GPT-3 uses 96. Each layer refines representations progressively — early layers tend to learn local syntax, middle layers sentence structure, deep layers abstract reasoning-like patterns. Nobody programs this hierarchy — it emerges from repeated optimization.
+- Used 2 stacked blocks in mini_gpt.py. Real GPT-2 small uses 12; GPT-3 uses 96. Each layer refines representations progressively — early layers tend to learn local syntax, middle layers sentence structure, deep layers abstract reasoning-like patterns. Nobody programs this hierarchy — it emerges from repeated optimization.
 - Kept `embed_dim = 16` in the Day 4 file for visual interpretability, then moved back to 64 in the full model.
 
 **Output shapes confirmed:**
@@ -298,8 +298,8 @@ The model was genuinely learning. Early improvements are large because the model
 |---|---|---|---|
 | Tokenization | Character-level | Simpler, transparent | Subword BPE, vocab ~50k+ |
 | Embedding dim | 64 (learning), 16 (mini GPT) | Readable outputs | 768–12,288 |
-| Attention heads | 2 | Minimal multi-perspective | 12–96 |
-| Transformer blocks | 2 stacked | Shows layering | 12–96+ |
+| Attention heads | 4 | Multi-perspective learning | 12–96 |
+| Transformer blocks | 4 stacked | Shows layering | 12–96+ |
 | FFN expansion | 4x embed_dim | Standard transformer design | Same ratio |
 | Optimizer | AdamW, lr=0.001 | Standard modern choice | Same |
 | Dataset | Word-level sentences / essays | Semantic learning possible | Internet-scale corpora |
